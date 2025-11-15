@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Díaz Ingenieros - Sistema de Gestión</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #2c3e7d 0%, #1a2850 100%);
+        }
+        .orange-btn {
+            background-color: #ff6b35;
+        }
+        .orange-btn:hover {
+            background-color: #ff5520;
+        }
+        .notification {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        @media print {
+            .no-print { display: none; }
+            body { background: white; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Componente principal
+        function App() {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [currentView, setCurrentView] = useState('login');
+            const [projects, setProjects] = useState([]);
+            const [employees, setEmployees] = useState([]);
+            const [attendance, setAttendance] = useState([]);
+            const [tasks, setTasks] = useState([]);
+            const [selectedProject, setSelectedProject] = useState(null);
+            const [notifications, setNotifications] = useState([]);
+
+            // Cargar datos del localStorage
+            useEffect(() => {
+                const savedUser = localStorage.getItem('diazCurrentUser');
+                if (savedUser) {
+                    setCurrentUser(JSON.parse(savedUser));
+                    setCurrentView('dashboard');
+                }
+
+                const savedProjects = localStorage.getItem('diazProjects');
+                if (savedProjects) setProjects(JSON.parse(savedProjects));
+
+                const savedEmployees = localStorage.getItem('diazEmployees');
+                if (savedEmployees) {
+                    setEmployees(JSON.parse(savedEmployees));
+                } else {
+                    // Usuario admin por defecto
+                    const defaultAdmin = {
+                        id: 1,
+                        username: 'admin',
+                        password: 'admin123',
+                        name: 'Administrador',
+                        email: 'admin@diazingenieros.com',
+                        role: 'Administrador',
+                        phone: '',
+                        position: 'Gerente General',
+                        createdAt: new Date().toISOString()
+                    };
+                    setEmployees([defaultAdmin]);
+                    localStorage.setItem('diazEmployees', JSON.stringify([defaultAdmin]));
+                }
+
+                const savedAttendance = localStorage.getItem('diazAttendance');
+                if (savedAttendance) setAttendance(JSON.parse(savedAttendance));
+
+                const savedTasks = localStorage.getItem('diazTasks');
+                if (savedTasks) setTasks(JSON.parse(savedTasks));
+            }, []);
+
+            // Guardar datos
+            useEffect(() => {
+                localStorage.setItem('diazProjects', JSON.stringify(projects));
+            }, [projects]);
+
+            useEffect(() => {
+                localStorage.setItem('diazEmployees', JSON.stringify(employees));
+            }, [employees]);
+
+            useEffect(() => {
+                localStorage.setItem('diazAttendance', JSON.stringify(attendance));
+            }, [attendance]);
+
+            useEffect(() => {
+                localStorage.setItem('diazTasks', JSON.stringify(tasks));
+            }, [tasks]);
+
+            const login = (username, password) => {
+                const user = employees.find(e => e.username === username && e.password === password);
+                if (user) {
+                    setCurrentUser(user);
+                    localStorage.setItem('diazCurrentUser', JSON.stringify(user));
+                    setCurrentView('dashboard');
+                    addNotification(`Bienvenido ${user.name}`, 'success');
+                    return true;
+                }
+                return false;
+            };
+
+            const logout = () => {
+                setCurrentUser(null);
+                localStorage.removeItem('diazCurrentUser');
+                setCurrentView('login');
+                addNotification('Sesión cerrada', 'info');
+            };
+
+            const addNotification = (message, type = 'info') => {
+                const notification = { id: Date.now(), message, type };
+                setNotifications(prev => [...prev, notification]);
+                setTimeout(() => {
+                    setNotifications(prev => prev.filter(n => n.id !== notification.id));
+                }, 3000);
+            };
+
+            // Funciones de proyectos
+            const addProject = (project) => {
+                const newProject = {
+                    ...project,
+                    id: Date.now(),
+                    activities: [],
+                    costs: [],
+                    evidences: [],
+                    createdBy: currentUser.id,
+                    createdAt: new Date().toISOString()
+                };
+                setProjects([...projects, newProject]);
+                addNotification('Proyecto creado exitosamente', 'success');
+            };
+
+            const updateProject = (id, updates) => {
+                setProjects(projects.map(p => p.id === id ? { ...p, ...updates } : p));
+                addNotification('Proyecto actualizado', 'success');
+            };
+
+            const deleteProject = (id) => {
+                if (confirm('¿Está seguro de eliminar este proyecto?')) {
+                    setProjects(projects.filter(p => p.id !== id));
+                    setTasks(tasks.filter(t => t.projectId !== id));
+                    setSelectedProject(null);
+                    setCurrentView('projects');
+                    addNotification('Proyecto eliminado', 'info');
+                }
+            };
+
+            // Funciones de empleados
+            const addEmployee = (employee) => {
+                const newEmployee = {
+                    ...employee,
+                    id: Date.now(),
+                    createdAt: new Date().toISOString()
+                };
+                setEmployees([...employees, newEmployee]);
+                addNotification('Empleado registrado exitosamente', 'success');
+            };
+
+            const updateEmployee = (id, updates) => {
+                setEmployees(employees.map(e => e.id === id ? { ...e, ...updates } : e));
+                addNotification('Empleado actualizado', 'success');
+            };
+
+            const deleteEmployee = (id) => {
+                if (confirm('¿Está seguro de eliminar este empleado?')) {
+                    setEmployees(employees.filter(e => e.id !== id));
+                    addNotification('Empleado eliminado', 'info');
+                }
+            };
+
+            // Funciones de asistencia
+            const checkIn = () => {
+                const today = new Date().toISOString().split('T')[0];
+                const existing = attendance.find(a => 
+                    a.employeeId === currentUser.id && 
+                    a.date === today
+                );
+
+                if (existing) {
+                    addNotification('Ya registraste tu ingreso hoy', 'warning');
+                    return;
+                }
+
+                const newAttendance = {
+                    id: Date.now(),
+                    employeeId: currentUser.id,
+                    employeeName: currentUser.name,
+                    date: today,
+                    checkIn: new Date().toISOString(),
+                    checkOut: null
+                };
+                setAttendance([...attendance, newAttendance]);
+                addNotification('Ingreso registrado correctamente', 'success');
+            };
+
+            const checkOut = () => {
+                const today = new Date().toISOString().split('T')[0];
+                const existing = attendance.find(a => 
+                    a.employeeId === currentUser.id && 
+                    a.date === today
+                );
+
+                if (!existing) {
+                    addNotification('Debes registrar tu ingreso primero', 'warning');
+                    return;
+                }
+
+                if (existing.checkOut) {
+                    addNotification('Ya registraste tu salida hoy', 'warning');
+                    return;
+                }
+
+                setAttendance(attendance.map(a => 
+                    a.id === existing.id 
+                        ? { ...a, checkOut: new Date().toISOString() }
+                        : a
+                ));
+                addNotification('Salida registrada correctamente', 'success');
+            };
+
+            // Funciones de tareas
+            const addTask = (task) => {
+                const newTask = {
+                    ...task,
+                    id: Date.now(),
+                    createdBy: currentUser.id,
+                    createdAt: new Date().toISOString(),
+                    status: 'Pendiente'
+                };
+                setTasks([...tasks, newTask]);
+                addNotification('Tarea asignada exitosamente', 'success');
+            };
+
+            const updateTask = (id, updates) => {
+                setTasks(tasks.map(t => t.id === id ? { ...t, ...updates } : t));
+                addNotification('Tarea actualizada', 'success');
+            };
+
+            const deleteTask = (id) => {
+                if (confirm('¿Eliminar esta tarea?')) {
+                    setTasks(tasks.filter(t => t.id !== id));
+                    addNotification('Tarea eliminada', 'info');
+                }
+            };
+
+            if (currentView === 'login') {
+                return (
+                    <LoginScreen 
+                        onLogin={login}
+                        addNotification={addNotification}
+                    />
+                );
+            }
+
+            return (
+                <div className="min-h-screen">
+                    <Header 
+                        currentUser={currentUser}
+                        onLogout={logout}
+                    />
+                    
+                    <Notifications notifications={notifications} />
+
+                    <main className="pb-20">
+                        {currentView === 'dashboard' && (
+                            <Dashboard 
+                                currentUser={currentUser}
+                                projects={projects}
+                                employees={employees}
+                                tasks={tasks}
+                                attendance={attendance}
+                                onCheckIn={checkIn}
+                                onCheckOut={checkOut}
+                                setCurrentView={setCurrentView}
+                            />
+                        )}
+
+                        {currentView === 'projects' && (
+                            <ProjectsList 
+                                projects={projects}
+                                onSelectProject={(project) => {
+                                    setSelectedProject(project);
+                                    setCurrentView('projectDetail');
+                                }}
+                                onNewProject={() => setCurrentView('newProject')}
+                            />
+                        )}
+
+                        {currentView === 'newProject' && (
+                            <NewProjectForm 
+                                onSave={addProject}
+                                onCancel={() => setCurrentView('projects')}
+                            />
+                        )}
+
+                        {currentView === 'projectDetail' && selectedProject && (
+                            <ProjectDetail 
+                                project={selectedProject}
+                                onUpdate={updateProject}
+                                onDelete={deleteProject}
+                                onBack={() => setCurrentView('projects')}
+                                currentUser={currentUser}
+                            />
+                        )}
+
+                        {currentView === 'employees' && (
+                            <EmployeeManagement 
+                                employees={employees}
+                                onAdd={addEmployee}
+                                onUpdate={updateEmployee}
+                                onDelete={deleteEmployee}
+                                currentUser={currentUser}
+                            />
+                        )}
+
+                        {currentView === 'attendance' && (
+                            <AttendanceView 
+                                attendance={attendance}
+                                employees={employees}
+                                currentUser={currentUser}
+                            />
+                        )}
+
+                        {currentView === 'tasks' && (
+                            <TaskManagement 
+                                tasks={tasks}
+                                projects={projects}
+                                employees={employees}
+                                onAdd={addTask}
+                                onUpdate={updateTask}
+                                onDelete={deleteTask}
+                                currentUser={currentUser}
+                            />
+                        )}
+
+                        {currentView === 'reports' && (
+                            <Reports 
+                                projects={projects}
+                                employees={employees}
+                                attendance={attendance}
+                                tasks={tasks}
+                            />
+                        )}
+                    </main>
+
+                    <BottomNav 
+                        currentView={currentView}
+                        setCurrentView={setCurrentView}
+                        setSelectedProject={setSelectedProject}
+                        currentUser={currentUser}
+                    />
+                </div>
+            );
+        }
+
+        // Pantalla de Login
+        function LoginScreen({ onLogin, addNotification }) {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!onLogin(username, password)) {
+                    addNotification('Usuario o contraseña incorrectos', 'error');
+                }
+            };
+
+            return (
+                <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+                        <div className="text-center mb-8">
+                            <div className="w-20 h-20 bg-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <span className="text-3xl font-bold text-white">D</span>
+                            </div>
+                            <h1 className="text-2xl font-bold text-gray-800">Díaz Ingenieros</h1>
+                            <p className="text-gray-600">Sistema de Gestión</p>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Usuario
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                    placeholder="Ingrese su usuario"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Contraseña
+                                </label>
+                                <input
+                                    type="password"
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                    placeholder="Ingrese su contraseña"
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="w-full orange-btn text-white py-3 rounded-lg font-semibold text-lg"
+                            >
+                                Iniciar Sesión
+                            </button>
+                        </form>
+
+                        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                            <p className="text-xs text-gray-600 text-center">
+                                <strong>Credenciales de prueba:</strong><br/>
+                                Usuario: admin | Contraseña: admin123
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Header
+        function Header({ currentUser, onLogout }) {
+            return (
+                <header className="gradient-bg text-white p-4 shadow-lg no-print">
+                    <div className="max-w-6xl mx-auto flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center font-bold">
+                                D
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-bold">Díaz Ingenieros</h1>
+                                <p className="text-xs text-gray-300">{currentUser?.name} - {currentUser?.role}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={onLogout}
+                            className="text-sm bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg"
+                        >
+                            Salir
+                        </button>
+                    </div>
+                </header>
+            );
+        }
+
+        // Notificaciones
+        function Notifications({ notifications }) {
+            return (
+                <div className="fixed top-20 right-4 z-50 space-y-2 no-print">
+                    {notifications.map(notification => (
+                        <div
+                            key={notification.id}
+                            className={`notification px-4 py-3 rounded-lg shadow-lg text-white ${
+                                notification.type === 'success' ? 'bg-green-500' :
+                                notification.type === 'error' ? 'bg-red-500' :
+                                notification.type === 'warning' ? 'bg-yellow-500' :
+                                'bg-blue-500'
+                            }`}
+                        >
+                            {notification.message}
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        // Dashboard
+        function Dashboard({ currentUser, projects, employees, tasks, attendance, onCheckIn, onCheckOut, setCurrentView }) {
+            const today = new Date().toISOString().split('T')[0];
+            const todayAttendance = attendance.find(a => 
+                a.employeeId === currentUser.id && a.date === today
+            );
+
+            const myTasks = tasks.filter(t => t.assignedTo === currentUser.id);
+            const pendingTasks = myTasks.filter(t => t.status === 'Pendiente');
+
+            return (
+                <div className="max-w-6xl mx-auto p-4">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-6">
+                        Bienvenido, {currentUser.name}
+                    </h2>
+
+                    {/* Control de Asistencia */}
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <h3 className="text-lg font-bold mb-4">Control de Asistencia</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                onClick={onCheckIn}
+                                disabled={todayAttendance?.checkIn}
+                                className={`py-4 rounded-lg font-semibold ${
+                                    todayAttendance?.checkIn
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-green-500 text-white hover:bg-green-600'
+                                }`}
+                            >
+                                {todayAttendance?.checkIn ? '✓ Entrada Registrada' : '→ Registrar Entrada'}
+                            </button>
+                            <button
+                                onClick={onCheckOut}
+                                disabled={!todayAttendance?.checkIn || todayAttendance?.checkOut}
+                                className={`py-4 rounded-lg font-semibold ${
+                                    !todayAttendance?.checkIn || todayAttendance?.checkOut
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-red-500 text-white hover:bg-red-600'
+                                }`}
+                            >
+                                {todayAttendance?.checkOut ? '✓ Salida Registrada' : '← Registrar Salida'}
+                            </button>
+                        </div>
+                        {todayAttendance && (
+                            <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
+                                <p><strong>Entrada:</strong> {new Date(todayAttendance.checkIn).toLocaleTimeString()}</p>
+                                {todayAttendance.checkOut && (
+                                    <p><strong>Salida:</strong> {new Date(todayAttendance.checkOut).toLocaleTimeString()}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Estadísticas */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-blue-500 text-white p-6 rounded-lg shadow-md">
+                            <p className="text-3xl font-bold">{projects.length}</p>
+                            <p className="text-sm">Proyectos</p>
+                        </div>
+                        <div className="bg-green-500 text-white p-6 rounded-lg shadow-md">
+                            <p className="text-3xl font-bold">{myTasks.length}</p>
+                            <p className="text-sm">Mis Tareas</p>
+                        </div>
+                        <div className="bg-orange-500 text-white p-6 rounded-lg shadow-md">
+                            <p className="text-3xl font-bold">{pendingTasks.length}</p>
+                            <p className="text-sm">Pendientes</p>
+                        </div>
+                        {currentUser.role === 'Administrador' && (
+                            <div className="bg-purple-500 text-white p-6 rounded-lg shadow-md">
+                                <p className="text-3xl font-bold">{employees.length}</p>
+                                <p className="text-sm">Empleados</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Mis Tareas Pendientes */}
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold">Mis Tareas Pendientes</h3>
+                            <button
+                                onClick={() => setCurrentView('tasks')}
+                                className="text-orange-500 text-sm font-semibold"
+                            >
+                                Ver todas →
+                            </button>
+                        </div>
+                        {pendingTasks.length === 0 ? (
+                            <p className="text-gray-500 text-center py-4">No tienes tareas pendientes</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {pendingTasks.slice(0, 3).map(task => (
+                                    <div key={task.id} className="border-l-4 border-orange-500 bg-gray-50 p-3 rounded">
+                                        <h4 className="font-semibold">{task.title}</h4>
+                                        <p className="text-sm text-gray-600">{task.description}</p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Vence: {new Date(task.dueDate).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Accesos Rápidos */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <button
+                            onClick={() => setCurrentView('projects')}
+                            className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+                        >
+                            <div className="text-4xl mb-2">📁</div>
+                            <p className="font-semibold">Proyectos</p>
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('tasks')}
+                            className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+                        >
+                            <div className="text-4xl mb-2">✓</div>
+                            <p className="font-semibold">Tareas</p>
+                        </button>
+                        {currentUser.role === 'Administrador' && (
+                            <>
+                                <button
+                                    onClick={() => setCurrentView('employees')}
+                                    className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+                                >
+                                    <div className="text-4xl mb-2">👥</div>
+                                    <p className="font-semibold">Personal</p>
+                                </button>
+                                <button
+                                    onClick={() => setCurrentView('attendance')}
+                                    className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+                                >
+                                    <div className="text-4xl mb-2">📋</div>
+                                    <p className="font-semibold">Asistencia</p>
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Lista de Proyectos (simplificado)
+        function ProjectsList({ projects, onSelectProject, onNewProject }) {
+            return (
+                <div className="max-w-6xl mx-auto p-4">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-800">Proyectos</h2>
+                        <button 
+                            onClick={onNewProject}
+                            className="orange-btn text-white px-4 py-2 rounded-lg shadow-md"
+                        >
+                            + Nuevo
+                        </button>
+                    </div>
+
+                    {projects.length === 0 ? (
+                        <div className="text-center py-12">
+                            <p className="text-gray-500 mb-4">No hay proyectos registrados</p>
+                            <button onClick={onNewProject} className="orange-btn text-white px-6 py-3 rounded-lg">
+                                Crear Proyecto
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4">
+                            {projects.map(project => (
+                                <div
+                                    key={project.id}
+                                    onClick={() => onSelectProject(project)}
+                                    className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg cursor-pointer border-l-4 border-orange-500"
+                                >
+                                    <h3 className="font-bold text-lg">{project.name}</h3>
+                                    <p className="text-sm text-gray-600">{project.client}</p>
+                                    <StatusBadge status={project.status} />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Badge de Estado
+        function StatusBadge({ status }) {
+            const colors = {
+                'Planificación': 'bg-yellow-100 text-yellow-800',
+                'En Proceso': 'bg-blue-100 text-blue-800',
+                'Completado': 'bg-green-100 text-green-800',
+                'Pausado': 'bg-gray-100 text-gray-800'
+            };
+            return (
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mt-2 ${colors[status]}`}>
+                    {status}
+                </span>
+            );
+        }
+
+        // Formulario Nuevo Proyecto (simplificado)
+        function NewProjectForm({ onSave, onCancel }) {
+            const [formData, setFormData] = useState({
+                name: '',
+                client: '',
+                description: '',
+                status: 'Planificación',
+                serviceType: 'Ingeniería Eléctrica',
+                location: ''
+            });
+
+            const serviceTypes = [
+                'Ingeniería Eléctrica',
+                'Sistemas de Seguridad',
+                'Mantenimiento Industrial',
+                'Refrigeración Industrial',
+                'Maquinaria Industrial',
+                'Redes de Telecomunicación',
+                'Obras Civiles',
+                'Servicios Generales'
+            ];
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (formData.name && formData.client) {
+                    onSave(formData);
+                    onCancel();
+                }
+            };
+
+            return (
+                <div className="max-w-2xl mx-auto p-4">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-6">Nuevo Proyecto</h2>
+                    
+                    <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Nombre del Proyecto *
+                            </label>
+                            <input
+                                type="text"
+                                required
+                                value={formData.name}
+                                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
+                                placeholder="Nombre del proyecto"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Cliente *
+                            </label>
+                            <input
+                                type="text"
+                                required
+                                value={formData.client}
+                                onChange={(e) => setFormData({...formData, client: e.target.value})}
+                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
+                                placeholder="Nombre del cliente"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Tipo de Servicio
+                            </label>
+                            <select
+                                value={formData.serviceType}
+                                onChange={(e) => setFormData({...formData, serviceType: e.target.value})}
+                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
+                            >
+                                {serviceTypes.map(type => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Ubicación
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.location}
+                                onChange={(e) => setFormData({...formData, location: e.target.value})}
+                                className="w-full px-4 py-2 border rounded-lg"
+                                placeholder="Ubicación"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Descripción
+                            </label>
+                            <textarea
+                                value={formData.description}
+                                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                className="w-full px-4 py-2 border rounded-lg"
+                                rows="3"
+                            ></textarea>
+                        </div>
+
+                        <div className="flex space-x-3">
+                            <button type="submit" className="flex-1 orange-btn text-white py-3 rounded-lg font-semibold">
+                                Guardar
+                            </button>
+                            <button type="button" onClick={onCancel} className="flex-1 bg-gray-300 py-3 rounded-lg font-semibold">
+                                Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            );
+        }
+
+        // Detalle de Proyecto (simplificado)
+        function ProjectDetail({ project, onUpdate, onDelete, onBack, currentUser }) {
+            return (
+                <div className="max-w-6xl mx-auto p-4">
+                    <button onClick={onBack} className="flex items-center text-gray-600 mb-4">
+                        ← Volver
+                    </button>
+
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                        <h2 className="text-2xl font-bold">{project.name}</h2>
+                        <p className="text-gray-600">{project.client}</p>
+                        <StatusBadge status={project.status} />
+                        <p className="mt-4 text-gray-700">{project.description}</p>
+                        
+                        {currentUser.role === 'Administrador' && (
+                            <button
+                                onClick={onDelete}
+                                className="mt-4 w-full bg-red-500 text-white py-2 rounded-lg"
+                            >
+                                Eliminar Proyecto
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Gestión de Empleados
+        function EmployeeManagement({ employees, onAdd, onUpdate, onDelete, currentUser }) {
+            const [showForm, setShowForm] = useState(false);
+            const [formData, setFormData] = useState({
+                username: '',
+                password: '',
+                name: '',
+                email: '',
+                role: 'Trabajador',
+                phone: '',
+                position: ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onAdd(formData);
+                setFormData({
+                    username: '',
+                    password: '',
+                    name: '',
+                    email: '',
+                    role: 'Trabajador',
+                    phone: '',
+                    position: ''
+                });
+                setShowForm(false);
+            };
+
+            if (currentUser.role !== 'Administrador') {
+                return (
+                    <div className="max-w-6xl mx-auto p-4">
+                        <p className="text-center text-gray-500 py-12">
+                            No tienes permisos para acceder a esta sección
+                        </p>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-6xl mx-auto p-4">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold">Gestión de Personal</h2>
+                        <button
+                            onClick={() => setShowForm(!showForm)}
+                            className="orange-btn text-white px-4 py-2 rounded-lg"
+                        >
+                            + Nuevo Empleado
+                        </button>
+                    </div>
+
+                    {showForm && (
+                        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Nombre Completo *</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Usuario *</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.username}
+                                        onChange={(e) => setFormData({...formData, username: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Contraseña *</label>
+                                    <input
+                                        type="password"
+                                        required
+                                        value={formData.password}
+                                        onChange={(e) => setFormData({...formData, password: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Email</label>
+                                    <input
+                                        type="email"
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Rol *</label>
+                                    <select
+                                        value={formData.role}
+                                        onChange={(e) => setFormData({...formData, role: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    >
+                                        <option>Administrador</option>
+                                        <option>Supervisor</option>
+                                        <option>Trabajador</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Cargo</label>
+                                    <input
+                                        type="text"
+                                        value={formData.position}
+                                        onChange={(e) => setFormData({...formData, position: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex space-x-3">
+                                <button type="submit" className="flex-1 bg-green-500 text-white py-2 rounded-lg">
+                                    Guardar
+                                </button>
+                                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-300 py-2 rounded-lg">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    <div className="grid gap-4">
+                        {employees.map(employee => (
+                            <div key={employee.id} className="bg-white p-4 rounded-lg shadow-md">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h3 className="font-bold text-lg">{employee.name}</h3>
+                                        <p className="text-sm text-gray-600">{employee.position || employee.role}</p>
+                                        <p className="text-xs text-gray-500">@{employee.username}</p>
+                                        {employee.email && <p className="text-xs text-gray-500">{employee.email}</p>}
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                            employee.role === 'Administrador' ? 'bg-red-100 text-red-800' :
+                                            employee.role === 'Supervisor' ? 'bg-blue-100 text-blue-800' :
+                                            'bg-green-100 text-green-800'
+                                        }`}>
+                                            {employee.role}
+                                        </span>
+                                        {employee.id !== 1 && (
+                                            <button
+                                                onClick={() => onDelete(employee.id)}
+                                                className="text-red-500 hover:text-red-700"
+                                            >
+                                                🗑️
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // Vista de Asistencia
+        function AttendanceView({ attendance, employees, currentUser }) {
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+            const filteredAttendance = attendance.filter(a => a.date === selectedDate);
+
+            if (currentUser.role !== 'Administrador' && currentUser.role !== 'Supervisor') {
+                const myAttendance = attendance.filter(a => a.employeeId === currentUser.id);
+                
+                return (
+                    <div className="max-w-6xl mx-auto p-4">
+                        <h2 className="text-2xl font-bold mb-6">Mi Asistencia</h2>
+                        <div className="space-y-3">
+                            {myAttendance.slice(-10).reverse().map(record => (
+                                <div key={record.id} className="bg-white p-4 rounded-lg shadow-md">
+                                    <div className="flex justify-between">
+                                        <div>
+                                            <p className="font-semibold">{new Date(record.date).toLocaleDateString()}</p>
+                                            <p className="text-sm text-gray-600">
+                                                Entrada: {new Date(record.checkIn).toLocaleTimeString()}
+                                            </p>
+                                            {record.checkOut && (
+                                                <p className="text-sm text-gray-600">
+                                                    Salida: {new Date(record.checkOut).toLocaleTimeString()}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {record.checkOut ? (
+                                            <span className="text-green-500">✓</span>
+                                        ) : (
+                                            <span className="text-yellow-500">⏳</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-6xl mx-auto p-4">
+                    <h2 className="text-2xl font-bold mb-6">Control de Asistencia</h2>
+
+                    <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+                        <label className="block text-sm font-semibold mb-2">Seleccionar Fecha</label>
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="w-full px-4 py-2 border rounded-lg"
+                        />
+                    </div>
+
+                    <div className="space-y-3">
+                        {filteredAttendance.length === 0 ? (
+                            <p className="text-center text-gray-500 py-8">
+                                No hay registros de asistencia para esta fecha
+                            </p>
+                        ) : (
+                            filteredAttendance.map(record => (
+                                <div key={record.id} className="bg-white p-4 rounded-lg shadow-md">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h3 className="font-bold">{record.employeeName}</h3>
+                                            <p className="text-sm text-gray-600">
+                                                Entrada: {new Date(record.checkIn).toLocaleTimeString()}
+                                            </p>
+                                            {record.checkOut && (
+                                                <p className="text-sm text-gray-600">
+                                                    Salida: {new Date(record.checkOut).toLocaleTimeString()}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            {record.checkOut ? (
+                                                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold">
+                                                    Completo
+                                                </span>
+                                            ) : (
+                                                <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-semibold">
+                                                    En Curso
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Gestión de Tareas
+        function TaskManagement({ tasks, projects, employees, onAdd, onUpdate, onDelete, currentUser }) {
+            const [showForm, setShowForm] = useState(false);
+            const [filterStatus, setFilterStatus] = useState('all');
+            const [formData, setFormData] = useState({
+                title: '',
+                description: '',
+                projectId: '',
+                assignedTo: '',
+                priority: 'Media',
+                dueDate: ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onAdd(formData);
+                setFormData({
+                    title: '',
+                    description: '',
+                    projectId: '',
+                    assignedTo: '',
+                    priority: 'Media',
+                    dueDate: ''
+                });
+                setShowForm(false);
+            };
+
+            const myTasks = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor'
+                ? tasks
+                : tasks.filter(t => t.assignedTo === currentUser.id);
+
+            const filteredTasks = filterStatus === 'all'
+                ? myTasks
+                : myTasks.filter(t => t.status === filterStatus);
+
+            return (
+                <div className="max-w-6xl mx-auto p-4">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold">Gestión de Tareas</h2>
+                        {(currentUser.role === 'Administrador' || currentUser.role === 'Supervisor') && (
+                            <button
+                                onClick={() => setShowForm(!showForm)}
+                                className="orange-btn text-white px-4 py-2 rounded-lg"
+                            >
+                                + Nueva Tarea
+                            </button>
+                        )}
+                    </div>
+
+                    {showForm && (
+                        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold mb-2">Título *</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.title}
+                                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                    className="w-full px-3 py-2 border rounded-lg"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold mb-2">Descripción</label>
+                                <textarea
+                                    value={formData.description}
+                                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                    className="w-full px-3 py-2 border rounded-lg"
+                                    rows="3"
+                                ></textarea>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Proyecto</label>
+                                    <select
+                                        value={formData.projectId}
+                                        onChange={(e) => setFormData({...formData, projectId: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    >
+                                        <option value="">Sin proyecto</option>
+                                        {projects.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Asignar a *</label>
+                                    <select
+                                        required
+                                        value={formData.assignedTo}
+                                        onChange={(e) => setFormData({...formData, assignedTo: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    >
+                                        <option value="">Seleccionar</option>
+                                        {employees.map(emp => (
+                                            <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Prioridad</label>
+                                    <select
+                                        value={formData.priority}
+                                        onChange={(e) => setFormData({...formData, priority: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    >
+                                        <option>Baja</option>
+                                        <option>Media</option>
+                                        <option>Alta</option>
+                                        <option>Urgente</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">Fecha de Vencimiento</label>
+                                    <input
+                                        type="date"
+                                        value={formData.dueDate}
+                                        onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
+                                        className="w-full px-3 py-2 border rounded-lg"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex space-x-3">
+                                <button type="submit" className="flex-1 bg-green-500 text-white py-2 rounded-lg">
+                                    Asignar Tarea
+                                </button>
+                                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-300 py-2 rounded-lg">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+                        <label className="block text-sm font-semibold mb-2">Filtrar por Estado</label>
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="w-full px-4 py-2 border rounded-lg"
+                        >
+                            <option value="all">Todas</option>
+                            <option value="Pendiente">Pendientes</option>
+                            <option value="En Proceso">En Proceso</option>
+                            <option value="Completada">Completadas</option>
+                        </select>
+                    </div>
+
+                    <div className="space-y-3">
+                        {filteredTasks.length === 0 ? (
+                            <p className="text-center text-gray-500 py-8">No hay tareas</p>
+                        ) : (
+                            filteredTasks.map(task => {
+                                const assignedEmployee = employees.find(e => e.id === task.assignedTo);
+                                const project = projects.find(p => p.id === task.projectId);
+                                
+                                return (
+                                    <div key={task.id} className="bg-white p-4 rounded-lg shadow-md border-l-4 border-orange-500">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="flex-1">
+                                                <h3 className="font-bold">{task.title}</h3>
+                                                <p className="text-sm text-gray-600">{task.description}</p>
+                                                {project && (
+                                                    <p className="text-xs text-gray-500 mt-1">📁 {project.name}</p>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col items-end space-y-1">
+                                                <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                                    task.priority === 'Urgente' ? 'bg-red-100 text-red-800' :
+                                                    task.priority === 'Alta' ? 'bg-orange-100 text-orange-800' :
+                                                    task.priority === 'Media' ? 'bg-yellow-100 text-yellow-800' :
+                                                    'bg-green-100 text-green-800'
+                                                }`}>
+                                                    {task.priority}
+                                                </span>
+                                                {(currentUser.role === 'Administrador' || currentUser.role === 'Supervisor') && (
+                                                    <button
+                                                        onClick={() => onDelete(task.id)}
+                                                        className="text-red-500 text-xs"
+                                                    >
+                                                        Eliminar
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between items-center mt-3 text-xs">
+                                            <span className="text-gray-500">
+                                                👤 {assignedEmployee?.name || 'Sin asignar'}
+                                            </span>
+                                            {task.dueDate && (
+                                                <span className="text-gray-500">
+                                                    📅 {new Date(task.dueDate).toLocaleDateString()}
+                                                </span>
+                                            )}
+                                            <select
+                                                value={task.status}
+                                                onChange={(e) => onUpdate(task.id, { status: e.target.value })}
+                                                className={`px-2 py-1 rounded text-xs font-semibold ${
+                                                    task.status === 'Completada' ? 'bg-green-100 text-green-800' :
+                                                    task.status === 'En Proceso' ? 'bg-blue-100 text-blue-800' :
+                                                    'bg-yellow-100 text-yellow-800'
+                                                }`}
+                                            >
+                                                <option>Pendiente</option>
+                                                <option>En Proceso</option>
+                                                <option>Completada</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Reportes
+        function Reports({ projects, employees, attendance, tasks }) {
+            const totalProjects = projects.length;
+            const totalEmployees = employees.length;
+            const totalTasks = tasks.length;
+            const completedTasks = tasks.filter(t => t.status === 'Completada').length;
+
+            const today = new Date().toISOString().split('T')[0];
+            const todayAttendance = attendance.filter(a => a.date === today);
+
+            return (
+                <div className="max-w-6xl mx-auto p-4">
+                    <div className="flex justify-between items-center mb-6 no-print">
+                        <h2 className="text-2xl font-bold">Reportes</h2>
+                        <button
+                            onClick={() => window.print()}
+                            className="orange-btn text-white px-4 py-2 rounded-lg"
+                        >
+                            🖨️ Imprimir
+                        </button>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                        <div className="text-center mb-6 border-b pb-4">
+                            <h1 className="text-2xl font-bold">DÍAZ INGENIEROS</h1>
+                            <p className="text-sm text-gray-600">Sistema de Gestión - Reporte General</p>
+                            <p className="text-xs text-gray-500 mt-2">
+                                Generado: {new Date().toLocaleString()}
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div className="bg-blue-50 p-4 rounded-lg text-center">
+                                <p className="text-3xl font-bold text-blue-700">{totalProjects}</p>
+                                <p className="text-sm text-gray-600">Proyectos</p>
+                            </div>
+                            <div className="bg-green-50 p-4 rounded-lg text-center">
+                                <p className="text-3xl font-bold text-green-700">{totalEmployees}</p>
+                                <p className="text-sm text-gray-600">Empleados</p>
+                            </div>
+                            <div className="bg-orange-50 p-4 rounded-lg text-center">
+                                <p className="text-3xl font-bold text-orange-700">{totalTasks}</p>
+                                <p className="text-sm text-gray-600">Tareas Totales</p>
+                            </div>
+                            <div className="bg-purple-50 p-4 rounded-lg text-center">
+                                <p className="text-3xl font-bold text-purple-700">{completedTasks}</p>
+                                <p className="text-sm text-gray-600">Completadas</p>
+                            </div>
+                        </div>
+
+                        <h3 className="text-lg font-bold mb-3">Asistencia de Hoy</h3>
+                        <div className="mb-6">
+                            {todayAttendance.length === 0 ? (
+                                <p className="text-gray-500 text-sm">No hay registros de asistencia hoy</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {todayAttendance.map(record => (
+                                        <div key={record.id} className="flex justify-between text-sm border-b pb-2">
+                                            <span>{record.employeeName}</span>
+                                            <span className="text-gray-600">
+                                                {new Date(record.checkIn).toLocaleTimeString()}
+                                                {record.checkOut && ` - ${new Date(record.checkOut).toLocaleTimeString()}`}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-8 pt-4 border-t text-center text-xs text-gray-500">
+                            <p>diazingenieros19@gmail.com | (+51) 970231545 / (+51) 948406188</p>
+                            <p>RUC: 20612221791 | Trujillo - La Libertad, Perú</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Navegación Inferior
+        function BottomNav({ currentView, setCurrentView, setSelectedProject, currentUser }) {
+            const navItems = [
+                { id: 'dashboard', icon: '🏠', label: 'Inicio' },
+                { id: 'projects', icon: '📁', label: 'Proyectos' },
+                { id: 'tasks', icon: '✓', label: 'Tareas' },
+                { id: 'reports', icon: '📊', label: 'Reportes' }
+            ];
+
+            if (currentUser.role === 'Administrador') {
+                navItems.splice(2, 0, 
+                    { id: 'employees', icon: '👥', label: 'Personal' }
+                );
+            }
+
+            return (
+                <nav className="no-print fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+                    <div className="max-w-6xl mx-auto flex overflow-x-auto">
+                        {navItems.map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => {
+                                    setCurrentView(item.id);
+                                    setSelectedProject(null);
+                                }}
+                                className={`flex-1 py-2 text-center min-w-[60px] ${
+                                    currentView === item.id ||
+                                    (currentView === 'newProject' && item.id === 'projects') ||
+                                    (currentView === 'projectDetail' && item.id === 'projects') ||
+                                    (currentView === 'attendance' && item.id === 'employees')
+                                        ? 'text-orange-500 font-semibold'
+                                        : 'text-gray-600'
+                                }`}
+                            >
+                                <div className="text-xl">{item.icon}</div>
+                                <div className="text-xs">{item.label}</div>
+                            </button>
+                        ))}
+                    </div>
+                </nav>
+            );
+        }
+
+        // Renderizar
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
